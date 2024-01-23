@@ -31,18 +31,18 @@ class CustomUserViewSet(UserViewSet):
     serializer_class = CustomUserSerializer
 
     @action(
-            ["get", "put", "patch", "delete"],
-            detail=False,
-            permission_classes=(IsAuthenticated,)
+        methods=["get", "put", "patch", "delete"],
+        detail=False,
+        permission_classes=(IsAuthenticated,)
     )
     def me(self, request, *args, **kwargs):
         """Обрабатывает запросы к эндпоинту /me"""
         return super().me(request, *args, **kwargs)
 
     @action(
-            detail=True,
-            methods=['post', 'delete'],
-            permission_classes=(IsAuthenticated,)
+        detail=True,
+        methods=['post', 'delete'],
+        permission_classes=(IsAuthenticated,)
     )
     def subscribe(self, request, **kwargs):
         """Создаёт и удаляет подписки."""
