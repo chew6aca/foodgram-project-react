@@ -1,4 +1,7 @@
+import os
 from pathlib import Path
+
+from django.core.management.utils import get_random_secret_key
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -19,9 +22,11 @@ INSTALLED_APPS = [
     'django_filters',
     'rest_framework.authtoken',
     'djoser',
+    'colorfield',
     'recipes.apps.RecipesConfig',
     'users.apps.UsersConfig',
     'api.apps.ApiConfig',
+    'core.apps.CoreConfig'
 ]
 
 MIDDLEWARE = [
@@ -56,12 +61,24 @@ WSGI_APPLICATION = 'foodgram.wsgi.application'
 
 AUTH_USER_MODEL = 'users.CustomUser'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+if os.getenv('DB_POSTGRES', False) == 'True':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('POSTGRES_DB', 'random_name'),
+            'USER': os.getenv('POSTGRES_USER', 'some_user'),
+            'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST', ''),
+            'PORT': os.getenv('DB_PORT', 5432)
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -80,9 +97,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'ru-RU'
 
-PAGE_SIZE = 5
-
-FIELD_SLICE = 15
+PAGE_SIZE = 10
 
 TIME_ZONE = 'UTC'
 
@@ -92,15 +107,13 @@ USE_L10N = True
 
 USE_TZ = True
 
-USER_FIELDS = ('id', 'email', 'username', 'first_name', 'last_name')
+STATIC_URL = '/static/django/'
 
-STATIC_URL = '/static/'
-
-STATIC_ROOT = BASE_DIR / 'static/'
+STATIC_ROOT = '/app/static_django/'
 
 MEDIA_URL = '/media/'
 
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = '/app/media/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -118,8 +131,7 @@ DJOSER = {
     'LOGIN_FIELD': 'email',
     'SERIALIZERS': {
         'user': 'api.serializers.CustomUserSerializer',
-        'current_user': 'api.serializers.CustomUserSerializer',
-        'user_create': 'api.serializers.CreateCustomUserSerializer'
+        'current_user': 'api.serializers.CustomUserSerializer'
     },
     'PERMISSIONS': {
         'user_list': ('api.permissions.IsAdminOrReadOnly',),

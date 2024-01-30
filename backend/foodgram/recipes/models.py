@@ -1,7 +1,9 @@
-from django.conf import settings
+from colorfield.fields import ColorField
 from django.contrib.auth import get_user_model
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
+
+from core import constants
 
 User = get_user_model()
 
@@ -9,45 +11,49 @@ User = get_user_model()
 class Tag(models.Model):
     """Модель тегов."""
     name = models.CharField(
-        max_length=200,
+        max_length=constants.TAG_NAME_LEN,
         verbose_name='Название'
     )
     slug = models.SlugField(
         blank=True,
-        verbose_name='Слаг'
+        verbose_name='Слаг',
+        max_length=constants.TAG_SLUG_LEN
     )
-    color = models.CharField(
-        max_length=7,
+    color = ColorField(
         blank=True,
-        verbose_name='Цвет'
-    )
+        verbose_name='Цвет')
 
     class Meta:
         verbose_name = 'Тег'
         verbose_name_plural = 'Теги'
 
     def __str__(self):
-        return self.slug[:settings.FIELD_SLICE]
+        return self.slug[:constants.SLICE_LEN]
 
 
 class Ingredient(models.Model):
     """Модель ингредиентов."""
     name = models.CharField(
-        max_length=200,
+        max_length=constants.INGREDIENT_NAME_LEN,
         verbose_name='Название'
     )
     measurement_unit = models.CharField(
-        max_length=200,
+        max_length=constants.MEASUREMENT_LEN,
         verbose_name='Единица измерения'
     )
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['name', 'measurement_unit'], name='unique_ingredient'
+            )
+        ]
         verbose_name = 'Ингредиент'
         verbose_name_plural = 'Ингредиенты'
         ordering = ('name',)
 
     def __str__(self):
-        return self.name[:settings.FIELD_SLICE]
+        return self.name[:constants.SLICE_LEN]
 
 
 class Recipe(models.Model):
@@ -58,7 +64,7 @@ class Recipe(models.Model):
         verbose_name='Теги'
     )
     name = models.CharField(
-        max_length=200,
+        max_length=constants.RECIPE_NAME,
         verbose_name='Название'
     )
     ingredients = models.ManyToManyField(
@@ -81,7 +87,14 @@ class Recipe(models.Model):
     cooking_time = models.PositiveSmallIntegerField(
         verbose_name='Время приготовления',
         validators=[
-            MinValueValidator(1)
+            MinValueValidator(
+                1,
+                message='Время готовки не может быть меньше 1.'
+            ),
+            MaxValueValidator(
+                32000,
+                message='Нельзя готовить так долго.'
+            )
         ]
     )
 
@@ -90,7 +103,7 @@ class Recipe(models.Model):
         verbose_name_plural = 'Рецепты'
 
     def __str__(self):
-        return self.name[:settings.FIELD_SLICE]
+        return self.name[:constants.SLICE_LEN]
 
 
 class RecipeTag(models.Model):
@@ -108,10 +121,7 @@ class RecipeTag(models.Model):
         verbose_name_plural = 'Теги рецептов'
 
     def __str__(self):
-        return (
-            f'{self.recipe.name[:settings.FIELD_SLICE]} - '
-            f'{self.tag.slug[:settings.FIELD_SLICE]}'
-        )
+        return (f'Тег рецепта {self.id}')
 
 
 class RecipeIngredient(models.Model):
@@ -122,7 +132,8 @@ class RecipeIngredient(models.Model):
     )
     ingredient = models.ForeignKey(
         Ingredient, on_delete=models.CASCADE,
-        verbose_name='Ингредиент'
+        verbose_name='Ингредиент',
+        related_name='amount_ingredient'
     )
     amount = models.PositiveSmallIntegerField(
         verbose_name='Количество'
@@ -133,61 +144,50 @@ class RecipeIngredient(models.Model):
         verbose_name_plural = 'Ингредиенты в рецепте'
 
     def __str__(self):
-        return (
-            f'{self.recipe.name[:settings.FIELD_SLICE]} - '
-            f'{self.ingredient.name[:settings.FIELD_SLICE]}'
-        )
+        return (f'Ингредиент рецепта {self.id}')
 
 
-class ShoppingCart(models.Model):
-    """Модель списка покупок."""
+class OwnerRecipeBaseModel(models.Model):
+    """Базовая модель."""
     owner = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='shopping',
         verbose_name='Владелец'
     )
     recipe = models.ForeignKey(
         Recipe,
         on_delete=models.CASCADE,
-        related_name='shopping',
         verbose_name='Рецепт'
     )
 
     class Meta:
+        abstract = True
+
+
+class ShoppingCart(OwnerRecipeBaseModel):
+    """Модель списка покупок."""
+
+    class Meta(OwnerRecipeBaseModel.Meta):
         verbose_name = 'Список покупок'
         verbose_name_plural = 'Списки покупок'
+        default_related_name = 'shopping'
         constraints = [
             models.UniqueConstraint(
-                fields=['owner', 'recipe'], name='unique_shopping_cart'
+                fields=['owner', 'recipe'], name='unique_shopping'
             )
         ]
 
     def __str__(self):
-        return (
-            f'{self.recipe.name[:settings.FIELD_SLICE]} - '
-            f'{self.owner.username[:settings.FIELD_SLICE]}'
-        )
+        return (f'Рецепт в списке покупок {self.id}')
 
 
-class Favorite(models.Model):
+class Favorite(OwnerRecipeBaseModel):
     """Модель избранного."""
-    owner = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name='favorited',
-        verbose_name='Владелец'
-    )
-    recipe = models.ForeignKey(
-        Recipe,
-        on_delete=models.CASCADE,
-        verbose_name='Рецепт',
-        related_name='favorited'
-    )
 
-    class Meta:
+    class Meta(OwnerRecipeBaseModel.Meta):
         verbose_name = 'Избранное'
         verbose_name_plural = 'Избранное'
+        default_related_name = 'favorited'
         constraints = [
             models.UniqueConstraint(
                 fields=['owner', 'recipe'], name='unique_favorite'
@@ -195,7 +195,4 @@ class Favorite(models.Model):
         ]
 
     def __str__(self):
-        return (
-            f'{self.recipe.name[:settings.FIELD_SLICE]} - '
-            f'{self.owner.username[:settings.FIELD_SLICE]}'
-        )
+        return (f'Рецепт в избранном {self.id}')

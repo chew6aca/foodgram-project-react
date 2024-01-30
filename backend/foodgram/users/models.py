@@ -1,30 +1,32 @@
 from django.contrib.auth.models import AbstractUser
-from django.core.validators import RegexValidator
+from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.db import models
+
+from core.constants import NAME_LEN, PASSWORD_LEN, SLICE_LEN
 
 
 class CustomUser(AbstractUser):
     """Кастомная модель пользователя."""
+    REQUIRED_FIELDS = ('first_name', 'last_name', 'username')
+    USERNAME_FIELD = 'email'
     username = models.CharField(
         'Никнейм',
-        max_length=150,
+        max_length=NAME_LEN,
         unique=True,
         validators=[
-            RegexValidator(
-                r'^[\w.@+-]+\Z',
-                'Вы не можете зарегестрировать пользователя с таким именем.'
-            )
+            UnicodeUsernameValidator()
         ]
     )
-    password = models.CharField('Пароль', max_length=150)
+    password = models.CharField('Пароль', max_length=PASSWORD_LEN)
     email = models.EmailField(
         'Электронная почта',
-        max_length=254,
         unique=True
     )
-    first_name = models.CharField('Имя', max_length=150)
-    last_name = models.CharField('Фамилия', max_length=150)
-    REQUIRED_FIELDS = ('first_name', 'last_name', 'email')
+    first_name = models.CharField('Имя', max_length=NAME_LEN)
+    last_name = models.CharField('Фамилия', max_length=NAME_LEN)
+
+    def __str__(self):
+        return self.username[:SLICE_LEN]
 
 
 class Subscribe(models.Model):

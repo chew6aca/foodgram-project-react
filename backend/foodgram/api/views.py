@@ -1,5 +1,4 @@
 from django.db.models import Sum
-from django.db.utils import IntegrityError
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -18,10 +17,10 @@ from users.models import Subscribe
 from .filters import IngredientFilter, RecipeModelFilter
 from .pagination import LimitPagination
 from .permissions import IsAuthorOrIsAdminOrReadOnly
-from .serializers import (CustomUserSerializer, IngredientSerializer,
-                          PostRecipeSerializer, RecipeShortSerializer,
-                          RecipeSerializer, SubscribeSerializer, TagSerializer)
-from .utils import get_shopping_list
+from .serializers import (CustomUserSerializer, FavoriteSerializer,
+                          IngredientSerializer, PostRecipeSerializer,
+                          RecipeSerializer, ShoppingSerializer,
+                          SubscribeSerializer, TagSerializer)
 
 
 class CustomUserViewSet(UserViewSet):
@@ -30,45 +29,36 @@ class CustomUserViewSet(UserViewSet):
     pagination_class = LimitPagination
     serializer_class = CustomUserSerializer
 
-    @action(
-        methods=["get", "put", "patch", "delete"],
-        detail=False,
-        permission_classes=(IsAuthenticated,)
-    )
-    def me(self, request, *args, **kwargs):
-        """Обрабатывает запросы к эндпоинту /me"""
-        return super().me(request, *args, **kwargs)
+    def get_permissions(self):
+        """Переопределяет разрешения для эндпоинта '/me'."""
+        if self.action == 'me':
+            self.permission_classes = (IsAuthenticated,)
+        return super(CustomUserViewSet, self).get_permissions()
 
     @action(
         detail=True,
-        methods=['post', 'delete'],
+        methods=('post',),
         permission_classes=(IsAuthenticated,)
     )
     def subscribe(self, request, **kwargs):
-        """Создаёт и удаляет подписки."""
+        """Создаёт объекты подписки."""
         author = get_object_or_404(User, pk=self.kwargs.get('id'))
-        user = request.user
-        if author == user:
-            raise ValidationError('Нельзя подписаться на самого себя.')
-        if request.method == 'POST':
-            serializer = SubscribeSerializer(
-                author, data=request.data, context={'request': request}
-            )
-            serializer.is_valid(raise_exception=True)
-            try:
-                Subscribe.objects.create(author=author, user=user)
-            except IntegrityError:
-                raise ValidationError(
-                    'Вы уже подписаны на этого пользователя.'
-                )
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        try:
-            subscribtion = get_object_or_404(
-                Subscribe, author=author, user=user
-            )
-        except Exception:
+        serializer = SubscribeSerializer(
+            author, data=request.data, context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @subscribe.mapping.delete
+    def delete_subscribe(self, request, **kwargs):
+        """Удаляет объекты подписки."""
+        author = get_object_or_404(User, pk=self.kwargs.get('id'))
+        del_subscription, _ = Subscribe.objects.filter(
+            author=author, user=request.user
+        ).delete()
+        if not del_subscription:
             raise ValidationError('Вы не подписаны на этого пользователя.')
-        subscribtion.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, permission_classes=(IsAuthenticated,))
@@ -111,57 +101,72 @@ class RecipeViewSet(ModelViewSet):
             return RecipeSerializer
         return PostRecipeSerializer
 
-    def perform_create(self, serializer):
-        """Создаёт рецепт."""
-        serializer.save(author=self.request.user)
-
-    def perform_update(self, serializer):
-        """Обновляет рецепт."""
-        serializer.save(author=self.request.user)
-
-    def create_obj(self, model, pk, owner):
+    def create_obj(self, serializer_model, pk, request):
         """Создание объекта."""
-        try:
-            recipe = get_object_or_404(Recipe, pk=pk)
-        except Exception:
-            raise ValidationError('Такого рецепта не существует.')
-        if model.objects.filter(recipe=recipe, owner=owner).exists():
-            raise ValidationError('Этот рецепт был добавлен ранее.')
-        model.objects.create(recipe=recipe, owner=owner)
-        serializer = RecipeShortSerializer(recipe)
+        data = {'recipe': pk}
+        serializer = serializer_model(
+            data=data, context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def delete_obj(self, model, pk, owner):
         """Удаление объекта."""
         recipe = get_object_or_404(Recipe, pk=pk)
-        try:
-            obj = get_object_or_404(
-                model, recipe=recipe, owner=owner
-            )
-        except Exception:
+        del_subscription, _ = model.objects.filter(
+            recipe=recipe, owner=owner
+        ).delete()
+        if not del_subscription:
             raise ValidationError('Этого рецепта нет в списке.')
-        obj.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(
-        detail=True, methods=['post', 'delete']
+            detail=True, methods=('post',)
     )
     def favorite(self, request, pk):
-        """Создаёт и удаляет объекты избранного."""
-        owner = request.user
-        if request.method == 'DELETE':
-            return self.delete_obj(pk=pk, owner=owner, model=Favorite)
-        return self.create_obj(pk=pk, owner=owner, model=Favorite)
+        return self.create_obj(
+            serializer_model=FavoriteSerializer,
+            pk=pk,
+            request=request
+        )
+
+    @favorite.mapping.delete
+    def delete_favorite(self, request, pk):
+        """Удаляет объекты избранного."""
+        return self.delete_obj(model=Favorite, pk=pk, owner=request.user)
 
     @action(
-        detail=True, methods=['post', 'delete']
+        detail=True, methods=['post']
     )
     def shopping_cart(self, request, pk):
-        """Создаёт и удаляет объекты списка покупок."""
-        owner = request.user
-        if request.method == 'DELETE':
-            return self.delete_obj(pk=pk, owner=owner, model=ShoppingCart)
-        return self.create_obj(pk=pk, owner=owner, model=ShoppingCart)
+        """Создаёт объекты списка покупок."""
+        return self.create_obj(
+            serializer_model=ShoppingSerializer,
+            pk=pk,
+            request=request
+        )
+
+    @shopping_cart.mapping.delete
+    def delete_shopping_cart(self, request, pk):
+        """Удаляет объекты списка покупок."""
+        return self.delete_obj(model=ShoppingCart, pk=pk, owner=request.user)
+
+    def get_shopping_list(self, ingredients, owner):
+        """Формирует содержимое файла со списком покупок."""
+        header = (
+            f'Список покупок.\nВладелец: {owner.first_name} '
+            f'{owner.last_name}.\n'
+        )
+        shopping_list = '\n'.join(
+            [
+                f'- {ingredient["ingredient__name"]} '
+                f' ({ingredient["ingredient__measurement_unit"]})'
+                f' {ingredient["amount"]} '
+                for ingredient in ingredients
+            ]
+        )
+        return header + shopping_list
 
     @action(detail=False)
     def download_shopping_cart(self, request):
@@ -175,7 +180,9 @@ class RecipeViewSet(ModelViewSet):
         ).annotate(
             amount=Sum('amount')
         )
-        shopping_list = get_shopping_list(ingredients, owner)
+        shopping_list = self.get_shopping_list(
+            ingredients=ingredients, owner=owner
+        )
         filename = 'shopping_list.txt'
         response = HttpResponse(shopping_list, content_type='text/plain')
         response['Content-Disposition'] = f'attachment; filename={filename}'
