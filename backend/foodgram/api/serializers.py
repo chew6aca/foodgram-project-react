@@ -83,9 +83,8 @@ class CustomUserSerializer(serializers.ModelSerializer):
         """
         request = self.context.get('request')
         return bool(
-            request and
-            request.user.is_authenticated and
-            Subscribe.objects.filter(
+            request and request.user.is_authenticated
+            and Subscribe.objects.filter(
                 user=request.user,
                 author=obj
             ).exists()
@@ -166,9 +165,8 @@ class RecipeSerializer(serializers.ModelSerializer):
         """
         request = self.context.get('request')
         return bool(
-            request and
-            request.user.is_authenticated and
-            request.user.favorited.filter(
+            request and request.user.is_authenticated
+            and request.user.favorited.filter(
                 recipe=obj
             ).exists()
         )
@@ -180,9 +178,8 @@ class RecipeSerializer(serializers.ModelSerializer):
         """
         request = self.context.get('request')
         return bool(
-            request and
-            request.user.is_authenticated and
-            request.user.shopping.filter(
+            request and request.user.is_authenticated
+            and request.user.shopping.filter(
                 recipe=obj
             ).exists()
         )

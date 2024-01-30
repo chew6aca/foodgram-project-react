@@ -121,9 +121,7 @@ class RecipeViewSet(ModelViewSet):
             raise ValidationError('Этого рецепта нет в списке.')
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(
-            detail=True, methods=('post',)
-    )
+    @action(detail=True, methods=('post',))
     def favorite(self, request, pk):
         return self.create_obj(
             serializer_model=FavoriteSerializer,
