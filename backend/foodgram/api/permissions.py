@@ -1,16 +1,13 @@
-from rest_framework.permissions import SAFE_METHODS, BasePermission
+from rest_framework.permissions import (
+    SAFE_METHODS, BasePermission, IsAuthenticatedOrReadOnly
+)
 
 
-class IsAuthorOrIsAdminOrReadOnly(BasePermission):
+class IsAuthorOrIsAdminOrReadOnly(IsAuthenticatedOrReadOnly):
     """
     Предоставляет полный доступ админу и автору,
     остальным пользователям даётся доступ только на чтение.
     """
-
-    def has_permission(self, request, view):
-        return request.method in SAFE_METHODS or (
-            request.user.is_authenticated
-        )
 
     def has_object_permission(self, request, view, obj):
         return request.method in SAFE_METHODS or (

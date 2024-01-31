@@ -20,7 +20,8 @@ from .permissions import IsAuthorOrIsAdminOrReadOnly
 from .serializers import (CustomUserSerializer, FavoriteSerializer,
                           IngredientSerializer, PostRecipeSerializer,
                           RecipeSerializer, ShoppingSerializer,
-                          SubscribeSerializer, TagSerializer)
+                          SubscribeSerializer, SubscribeWriteSerializer,
+                          TagSerializer)
 
 
 class CustomUserViewSet(UserViewSet):
@@ -43,8 +44,12 @@ class CustomUserViewSet(UserViewSet):
     def subscribe(self, request, **kwargs):
         """Создаёт объекты подписки."""
         author = get_object_or_404(User, pk=self.kwargs.get('id'))
-        serializer = SubscribeSerializer(
-            author, data=request.data, context={'request': request}
+        data = {
+            'author': author.id,
+            'user': request.user.id
+        }
+        serializer = SubscribeWriteSerializer(
+            data=data, context={'request': request}
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -103,7 +108,7 @@ class RecipeViewSet(ModelViewSet):
 
     def create_obj(self, serializer_model, pk, request):
         """Создание объекта."""
-        data = {'recipe': pk}
+        data = {'recipe': pk, 'owner': request.user.id}
         serializer = serializer_model(
             data=data, context={'request': request}
         )
@@ -150,7 +155,8 @@ class RecipeViewSet(ModelViewSet):
         """Удаляет объекты списка покупок."""
         return self.delete_obj(model=ShoppingCart, pk=pk, owner=request.user)
 
-    def get_shopping_list(self, ingredients, owner):
+    @staticmethod
+    def get_shopping_list(ingredients, owner):
         """Формирует содержимое файла со списком покупок."""
         header = (
             f'Список покупок.\nВладелец: {owner.first_name} '

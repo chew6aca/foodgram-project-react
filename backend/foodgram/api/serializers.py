@@ -111,10 +111,8 @@ class SubscribeSerializer(CustomUserSerializer):
         if recipes_limit:
             try:
                 recipes = recipes[:int(recipes_limit)]
-            except Exception:
-                raise ValidationError(
-                    'В recipes_limit должны быть только цифры.'
-                )
+            except ValueError:
+                pass
         serializer = RecipeShortSerializer(
             recipes, many=True, read_only=True
         )
@@ -124,19 +122,31 @@ class SubscribeSerializer(CustomUserSerializer):
         """Получает количество рецептов автора."""
         return obj.recipes.count()
 
+
+class SubscribeWriteSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Subscribe
+        fields = ('user', 'author')
+
     def validate(self, attrs):
-        author = self.instance
-        user = self.context.get('request').user
+        author = attrs['author']
+        user = attrs['user']
         if author == user:
-            raise ValidationError('Нельзя подписаться на самого себя.')
+            raise ValidationError(
+                'Нельзя подписаться на самого себя.'
+            )
         if Subscribe.objects.filter(author=author, user=user).exists():
-            raise ValidationError('Вы уже подписаны на этого пользователя.')
+            raise ValidationError(
+                'Вы уже подписаны на этого пользователя.'
+            )
         return attrs
 
-    def update(self, instance, validated_data):
-        user = self.context.get('request').user
-        Subscribe.objects.create(author=instance, user=user)
-        return instance
+    def to_representation(self, instance):
+        return SubscribeSerializer(
+            instance.author,
+            context={'request': self.context.get('request')}
+        ).data
 
 
 class RecipeSerializer(serializers.ModelSerializer):
@@ -264,25 +274,18 @@ class BaseFavoriteShoppingSerializer(serializers.ModelSerializer):
     """
     Базовый сериализатор для создания записей избранного и списка покупок.
     """
-    recipe = serializers.PrimaryKeyRelatedField(queryset=Recipe.objects.all())
 
     class Meta:
         abstract = True
-        fields = ('recipe',)
-        read_only_fields = ('recipe',)
+        fields = ('recipe', 'owner')
         model = None
 
     def validate(self, attrs):
         recipe = attrs['recipe']
-        owner = self.context.get('request').user
+        owner = attrs['owner']
         if self.Meta.model.objects.filter(recipe=recipe, owner=owner).exists():
             raise ValidationError('Этот рецепт уже есть в списке.')
         return attrs
-
-    def create(self, validated_data):
-        owner = self.context.get('request').user
-        recipe = validated_data.get('recipe')
-        return self.Meta.model.objects.create(recipe=recipe, owner=owner)
 
     def to_representation(self, instance):
         return RecipeShortSerializer(

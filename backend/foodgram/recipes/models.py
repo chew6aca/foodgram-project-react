@@ -88,12 +88,17 @@ class Recipe(models.Model):
         verbose_name='Время приготовления',
         validators=[
             MinValueValidator(
-                1,
-                message='Время готовки не может быть меньше 1.'
+                constants.COOKING_TIME_MIN,
+                message=(
+                    'Время готовки не может быть меньше '
+                    f'{constants.COOKING_TIME_MIN} мин.'
+                )
             ),
             MaxValueValidator(
-                32000,
-                message='Нельзя готовить так долго.'
+                constants.COOKING_TIME_MAX,
+                message=(
+                    f'Нельзя готовить дольше {constants.COOKING_TIME_MAX} мин.'
+                )
             )
         ]
     )
@@ -162,6 +167,11 @@ class OwnerRecipeBaseModel(models.Model):
 
     class Meta:
         abstract = True
+        constraints = [
+            models.UniqueConstraint(
+                fields=['owner', 'recipe'], name='%(class)s_unique'
+            )
+        ]
 
 
 class ShoppingCart(OwnerRecipeBaseModel):
@@ -171,11 +181,6 @@ class ShoppingCart(OwnerRecipeBaseModel):
         verbose_name = 'Список покупок'
         verbose_name_plural = 'Списки покупок'
         default_related_name = 'shopping'
-        constraints = [
-            models.UniqueConstraint(
-                fields=['owner', 'recipe'], name='unique_shopping'
-            )
-        ]
 
     def __str__(self):
         return (f'Рецепт в списке покупок {self.id}')
@@ -188,11 +193,6 @@ class Favorite(OwnerRecipeBaseModel):
         verbose_name = 'Избранное'
         verbose_name_plural = 'Избранное'
         default_related_name = 'favorited'
-        constraints = [
-            models.UniqueConstraint(
-                fields=['owner', 'recipe'], name='unique_favorite'
-            )
-        ]
 
     def __str__(self):
         return (f'Рецепт в избранном {self.id}')
