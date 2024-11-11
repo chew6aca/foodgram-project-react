@@ -165,5 +165,5 @@ GET api/users/subscriptions/
 Email:
 
 ```
-fisherr1@yandex.ru
+[fisherr1@yandex.ru](mailto:fisherr1@yandex.ru)
 ```
