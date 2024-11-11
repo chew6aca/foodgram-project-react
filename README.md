@@ -157,13 +157,8 @@ GET api/users/subscriptions/
 + Nginx
 + Docker
 + Postgres
-## Автор
-```
-Александр Чупахин
-```
 
-Email:
 
-```
-[fisherr1@yandex.ru](mailto:fisherr1@yandex.ru)
-```
+Автор: Александр Чупахин
+
+Email: [fisherr1@yandex.ru](mailto:fisherr1@yandex.ru)
